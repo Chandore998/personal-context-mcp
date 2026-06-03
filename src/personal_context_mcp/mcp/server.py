@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from personal_context_mcp.config.settings import get_settings
 from personal_context_mcp.models.enums import MemoryType
@@ -72,12 +73,32 @@ class PersonalContextMCPServer:
 
     def create_fastmcp_server(self, streamable_http_path: str = "/mcp") -> FastMCP:
         settings = get_settings()
+        allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+        allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
+
+        if settings.railway_public_domain:
+            allowed_hosts.append(settings.railway_public_domain)
+            allowed_origins.extend(
+                [
+                    f"https://{settings.railway_public_domain}",
+                    f"http://{settings.railway_public_domain}",
+                ]
+            )
+
+        allowed_hosts.extend(settings.mcp_allowed_hosts)
+        allowed_origins.extend(settings.mcp_allowed_origins)
+
         mcp = FastMCP(
             name=settings.mcp_server_name,
             log_level=settings.log_level,
             streamable_http_path=streamable_http_path,
             stateless_http=True,
             json_response=True,
+            transport_security=TransportSecuritySettings(
+                enable_dns_rebinding_protection=settings.mcp_enable_dns_rebinding_protection,
+                allowed_hosts=sorted(set(allowed_hosts)),
+                allowed_origins=sorted(set(allowed_origins)),
+            ),
         )
 
         @mcp.tool()

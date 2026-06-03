@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     context_task_limit: int = Field(default=3, alias="CONTEXT_TASK_LIMIT")
     mcp_server_name: str = Field(default="personal-context-mcp", alias="MCP_SERVER_NAME")
     mcp_transport: str = Field(default="stdio", alias="MCP_TRANSPORT")
+    mcp_enable_dns_rebinding_protection: bool = Field(
+        default=True,
+        alias="MCP_ENABLE_DNS_REBINDING_PROTECTION",
+    )
+    mcp_allowed_hosts: list[str] = Field(default_factory=list, alias="MCP_ALLOWED_HOSTS")
+    mcp_allowed_origins: list[str] = Field(default_factory=list, alias="MCP_ALLOWED_ORIGINS")
+    railway_public_domain: str | None = Field(default=None, alias="RAILWAY_PUBLIC_DOMAIN")
     sql_echo: bool = Field(default=False, alias="SQL_ECHO")
 
     @field_validator("database_url")
@@ -33,6 +40,15 @@ class Settings(BaseSettings):
         if value.startswith("postgres://"):
             return value.replace("postgres://", "postgresql+psycopg://", 1)
         return value
+
+    @field_validator("mcp_allowed_hosts", "mcp_allowed_origins", mode="before")
+    @classmethod
+    def split_csv_values(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [item.strip() for item in value if item and item.strip()]
+        return [item.strip() for item in value.split(",") if item.strip()]
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
