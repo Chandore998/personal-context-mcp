@@ -250,3 +250,6 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+tests
+start-dev.cmd
+start-dev.ps1
