@@ -1,2 +1,214 @@
 # personal-context-mcp
-Personal Context MCP is a memory and context server that helps AI agents remember user preferences, work styles, goals, projects, and past interactions. It provides persistent context retrieval and management across conversations, enabling more personalized and intelligent agent experiences.
+
+`personal-context-mcp` is a personal memory backend for AI agents. It stores user profile data, work style, reusable memories, and task outcomes, then exposes that context through both FastAPI endpoints and MCP tools.
+
+The goal is simple: give agents a lightweight, structured memory layer they can read before a task and update after a task.
+
+## What this repo includes
+
+- FastAPI service for managing profile, work style, memories, task outcomes, and relevant context
+- MCP server built with FastMCP for agent-side context access
+- PostgreSQL + `pgvector` storage layer using SQLAlchemy and Alembic
+- Streamlit dashboard for local inspection and manual management
+- Retrieval service that returns compressed context instead of raw history
+
+## Current scope
+
+This is an early V1 scaffold focused on the memory backend itself.
+
+What is implemented:
+
+- persistent profile, work style, memory, and task-outcome models
+- keyword and metadata-based retrieval
+- MCP tool registration
+- local HTTP management endpoints
+- database migrations and test coverage for the core service flow
+
+What is not implemented yet:
+
+- production-grade authentication or multi-user isolation
+- external embedding provider integration
+- background jobs, Redis, or async pipelines
+- browser or IDE telemetry ingestion
+
+## Architecture
+
+```text
+src/personal_context_mcp/
+|-- api/           FastAPI routes and app setup
+|-- config/        Environment-based settings
+|-- db/            SQLAlchemy base and session management
+|-- mcp/           FastMCP server and CLI entrypoint
+|-- models/        SQLAlchemy entities
+|-- repositories/  Persistence layer
+|-- schemas/       Pydantic request and response models
+|-- services/      Business logic and retrieval
+`-- dashboard/     Streamlit UI
+```
+
+## MCP tools
+
+The MCP server exposes these tools:
+
+- `get_user_profile`
+- `get_work_style`
+- `search_memory`
+- `get_relevant_context`
+- `save_memory`
+- `save_task_outcome`
+
+## Retrieval flow
+
+When a client asks for relevant context, the service:
+
+1. Loads the active user profile.
+2. Loads the active work style.
+3. Searches matching memories.
+4. Searches related task outcomes.
+5. Returns a compact `context_summary` plus the structured source records.
+
+This keeps downstream prompts smaller and more deterministic than dumping full chat history.
+
+## Quick start
+
+### Prerequisites
+
+- Python 3.11+
+- PostgreSQL 15+
+- `pgvector` enabled in the target database
+
+### Install
+
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+If you prefer editable installs with dev dependencies:
+
+```powershell
+pip install -e .[dev]
+```
+
+### Configure
+
+Set at least the database connection in `.env`:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/personal_context_mcp
+PGVECTOR_DIMENSION=1536
+MCP_TRANSPORT=stdio
+```
+
+### Initialize the database
+
+Create the database, then run migrations:
+
+```powershell
+createdb personal_context_mcp
+alembic upgrade head
+```
+
+The initial migration creates the `vector` extension if needed. If your database user cannot create extensions, install `pgvector` as an administrator first.
+
+## Run locally
+
+### FastAPI
+
+```powershell
+uvicorn personal_context_mcp.main:app --reload
+```
+
+API docs are available at `http://127.0.0.1:8000/docs` in non-production environments.
+
+### Streamlit dashboard
+
+```powershell
+streamlit run src/personal_context_mcp/dashboard/streamlit_app.py
+```
+
+### FastAPI and Streamlit together
+
+```powershell
+.\start-dev.cmd
+```
+
+This starts:
+
+- FastAPI on `http://127.0.0.1:8000`
+- Streamlit on `http://127.0.0.1:8501`
+
+### MCP server
+
+```powershell
+python -m personal_context_mcp.mcp
+```
+
+## HTTP API
+
+Main endpoints:
+
+- `GET /health`
+- `GET /profile`
+- `PUT /profile`
+- `GET /work-style`
+- `PUT /work-style`
+- `POST /memories`
+- `GET /memories`
+- `GET /memories/recent`
+- `POST /task-outcomes`
+- `GET /task-outcomes`
+- `POST /context`
+
+## Configuration
+
+The main environment variables are:
+
+- `APP_NAME`
+- `APP_ENV`
+- `LOG_LEVEL`
+- `DATABASE_URL`
+- `EMBEDDING_DIMENSIONS`
+- `PGVECTOR_DIMENSION`
+- `CONTEXT_MEMORY_LIMIT`
+- `CONTEXT_TASK_LIMIT`
+- `MCP_SERVER_NAME`
+- `MCP_TRANSPORT`
+- `SQL_ECHO`
+
+## Development
+
+Run tests:
+
+```powershell
+pytest
+```
+
+Run lint checks:
+
+```powershell
+ruff check .
+ruff format --check .
+```
+
+## Design notes
+
+- The storage layer is separated from retrieval logic so ranking can evolve without rewriting the API or MCP surface.
+- `pgvector` support is already part of the schema boundary, but V1 retrieval still relies on keyword relevance, importance, and recency.
+- The dashboard is meant for local operations and inspection, not as a polished end-user product.
+
+## Limitations
+
+- No embedding provider is wired into the retrieval pipeline yet.
+- Ranking is not semantic in practice until embeddings are generated and queried.
+- The project is currently geared toward local and single-user usage.
+
+## Roadmap ideas
+
+- Add embedding generation and semantic search
+- Support multi-user or workspace-scoped memory
+- Add auth for API and MCP access
+- Add import/export and backup tooling
+- Add agent wrapper examples once the adapter layer is finalized
