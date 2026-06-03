@@ -70,9 +70,15 @@ class PersonalContextMCPServer:
         )
         return task_outcome.model_dump()
 
-    def create_fastmcp_server(self) -> FastMCP:
+    def create_fastmcp_server(self, streamable_http_path: str = "/mcp") -> FastMCP:
         settings = get_settings()
-        mcp = FastMCP(name=settings.mcp_server_name, log_level=settings.log_level)
+        mcp = FastMCP(
+            name=settings.mcp_server_name,
+            log_level=settings.log_level,
+            streamable_http_path=streamable_http_path,
+            stateless_http=True,
+            json_response=True,
+        )
 
         @mcp.tool()
         def get_user_profile() -> dict[str, Any] | None:
@@ -184,3 +190,21 @@ def get_tool_registry(server: PersonalContextMCPServer) -> dict[str, Callable[..
         "save_memory": server.save_memory,
         "save_task_outcome": server.save_task_outcome,
     }
+
+
+def build_personal_context_mcp_server() -> PersonalContextMCPServer:
+    from personal_context_mcp.services.dependencies import (
+        get_memory_service,
+        get_profile_service,
+        get_retrieval_service,
+        get_task_outcome_service,
+        get_work_style_service,
+    )
+
+    return PersonalContextMCPServer(
+        profile_service=get_profile_service(),
+        work_style_service=get_work_style_service(),
+        memory_service=get_memory_service(),
+        retrieval_service=get_retrieval_service(),
+        task_outcome_service=get_task_outcome_service(),
+    )

@@ -1,24 +1,13 @@
-from personal_context_mcp.services.dependencies import (
-    get_memory_service,
-    get_profile_service,
-    get_retrieval_service,
-    get_task_outcome_service,
-    get_work_style_service,
-)
+from personal_context_mcp.config.settings import get_settings
 
-from .server import PersonalContextMCPServer
+from .server import build_personal_context_mcp_server
 
 
 def main() -> None:
-    server = PersonalContextMCPServer(
-        profile_service=get_profile_service(),
-        work_style_service=get_work_style_service(),
-        memory_service=get_memory_service(),
-        retrieval_service=get_retrieval_service(),
-        task_outcome_service=get_task_outcome_service(),
-    )
+    settings = get_settings()
+    server = build_personal_context_mcp_server()
     mcp_server = server.create_fastmcp_server()
-    mcp_server.run(transport="stdio")
+    mcp_server.run(transport=settings.mcp_transport)
 
 
 if __name__ == "__main__":
