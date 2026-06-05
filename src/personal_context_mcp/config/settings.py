@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     railway_public_domain: str | None = Field(default=None, alias="RAILWAY_PUBLIC_DOMAIN")
     sql_echo: bool = Field(default=False, alias="SQL_ECHO")
 
+
     @field_validator("database_url")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:

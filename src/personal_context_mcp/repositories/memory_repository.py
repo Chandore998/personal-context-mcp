@@ -9,22 +9,28 @@ from personal_context_mcp.schemas.memory import MemoryCreate, MemorySearchQuery
 
 
 class MemoryRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, user_id: str = "default") -> None:
         self.session = session
+        self.user_id = user_id
 
     def create(self, payload: MemoryCreate) -> Memory:
-        memory = Memory(**payload.model_dump())
+        memory = Memory(**payload.model_dump(), user_id=self.user_id)
         self.session.add(memory)
         self.session.flush()
         self.session.commit()
         return memory
 
     def list_recent(self, limit: int = 10) -> list[Memory]:
-        stmt = select(Memory).order_by(Memory.created_at.desc(), Memory.id.desc()).limit(limit)
+        stmt = (
+            select(Memory)
+            .where(Memory.user_id == self.user_id)
+            .order_by(Memory.created_at.desc(), Memory.id.desc())
+            .limit(limit)
+        )
         return list(self.session.scalars(stmt))
 
     def search(self, query: MemorySearchQuery) -> list[Memory]:
-        stmt = select(Memory)
+        stmt = select(Memory).where(Memory.user_id == self.user_id)
         memories = list(self.session.scalars(stmt))
 
         if query.tags:

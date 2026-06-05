@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib import error, parse, request
 
@@ -18,6 +18,11 @@ FORM_KEYS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# HTTP helpers
+# ---------------------------------------------------------------------------
+
+
 def _normalize_base_url(value: str) -> str:
     return value.rstrip("/")
 
@@ -32,6 +37,7 @@ def _request_json(
     path: str,
     payload: dict[str, Any] | None = None,
     query: dict[str, Any] | None = None,
+    api_key: str | None = None,
 ) -> Any:
     url = f"{_normalize_base_url(base_url)}{path}"
     if query:
@@ -48,6 +54,8 @@ def _request_json(
 
     body = None
     headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -64,17 +72,20 @@ def _request_json(
         raise RuntimeError(f"Could not reach API at {url}: {exc.reason}") from exc
 
 
-def _format_timestamp(value: str | None) -> str:
+def _format_timestamp(value: str | datetime | None) -> str:
     if not value:
-        return "-"
+        return "—"
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M UTC")
     try:
-        return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M UTC")
     except ValueError:
-        return value
+        return str(value)
 
 
-def _set_active_form(form_key: str | None) -> None:
-    st.session_state["active_form"] = form_key
+# ---------------------------------------------------------------------------
+# Styles
+# ---------------------------------------------------------------------------
 
 
 def _render_styles() -> None:
@@ -103,9 +114,7 @@ def _render_styles() -> None:
             background: linear-gradient(180deg, #0f0f0f 0%, #1f1f1f 100%);
             border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
-        [data-testid="stSidebar"] * {
-            color: #ffffff;
-        }
+        [data-testid="stSidebar"] * { color: #ffffff; }
         [data-testid="stSidebar"] .stTextInput input {
             background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
@@ -115,9 +124,7 @@ def _render_styles() -> None:
             background: rgba(255, 255, 255, 0.08);
             border-color: rgba(255, 255, 255, 0.14);
         }
-        h1, h2, h3 {
-            color: var(--pc-text);
-        }
+        h1, h2, h3 { color: var(--pc-text); }
         [data-testid="stVerticalBlock"] [data-testid="stVerticalBlockBorderWrapper"] {
             background: var(--pc-surface);
             border: 1px solid var(--pc-border);
@@ -132,41 +139,24 @@ def _render_styles() -> None:
             color: var(--pc-text);
             border: 1px solid var(--pc-border);
         }
-        .stTextInput input:focus,
-        .stTextArea textarea:focus {
-            border-color: var(--pc-border-strong);
-            box-shadow: 0 0 0 1px var(--pc-border-strong);
-        }
-        .stButton > button,
-        .stFormSubmitButton > button {
+        .stButton > button, .stFormSubmitButton > button {
             background: linear-gradient(180deg, #1f1f1f 0%, var(--pc-accent) 100%);
             color: #ffffff;
             border: 1px solid #000000;
             border-radius: 12px;
             box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
         }
-        .stButton > button:hover,
-        .stFormSubmitButton > button:hover {
+        .stButton > button:hover, .stFormSubmitButton > button:hover {
             background: linear-gradient(180deg, #2d2d2d 0%, #000000 100%);
             border-color: #000000;
         }
-        .stCaption,
-        [data-testid="stMarkdownContainer"] p {
-            color: var(--pc-muted);
-        }
+        .stCaption, [data-testid="stMarkdownContainer"] p { color: var(--pc-muted); }
         [class*="st-key-close-"] button {
-            width: 2.4rem;
-            min-width: 2.4rem;
-            height: 2.4rem;
-            padding: 0;
-            border-radius: 999px;
+            width: 2.4rem; min-width: 2.4rem; height: 2.4rem;
+            padding: 0; border-radius: 999px;
             border: 1px solid var(--pc-border);
-            font-size: 1.15rem;
-            font-weight: 700;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-size: 1.15rem; font-weight: 700; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
             margin: 0 auto;
             background: var(--pc-surface-strong);
             color: var(--pc-text);
@@ -174,8 +164,7 @@ def _render_styles() -> None:
         }
         [class*="st-key-close-"] button:hover {
             border-color: var(--pc-border-strong);
-            color: #000000;
-            background: #ebebeb;
+            color: #000000; background: #ebebeb;
         }
         </style>
         """,
@@ -183,45 +172,54 @@ def _render_styles() -> None:
     )
 
 
-def _render_form_actions() -> None:
+# ---------------------------------------------------------------------------
+# Memory / context tab helpers
+# ---------------------------------------------------------------------------
+
+
+def _set_active_form(form_key: str | None) -> None:
+    st.session_state["active_form"] = form_key
+
+
+def _render_form_actions(form_keys: tuple[str, ...], *, key_prefix: str) -> None:
     st.subheader("Actions")
-    for form_key, label in FORM_KEYS.items():
-        if st.button(label, key=f"open-{form_key}", use_container_width=True):
+    for form_key in form_keys:
+        label = FORM_KEYS[form_key]
+        if st.button(
+            label,
+            key=f"{key_prefix}-open-{form_key}",
+            use_container_width=True,
+        ):
             _set_active_form(form_key)
 
 
 def _render_form_shell(form_key: str, title: str) -> bool:
     if st.session_state.get("active_form") != form_key:
         return False
-
     with st.container(border=True):
         head, tail = st.columns([8, 1], vertical_alignment="center")
         with head:
             st.markdown(f"### {title}")
         with tail:
-            if st.button(
-                "×",
-                key=f"close-{form_key}",
-                help="Close form",
-                type="secondary",
-            ):
+            if st.button("×", key=f"close-{form_key}", help="Close form", type="secondary"):
                 _set_active_form(None)
                 st.rerun()
     return True
 
 
-def _render_memory_feed(base_url: str) -> None:
+def _render_memory_feed(base_url: str, api_key: str) -> None:
     st.subheader("Recent Memories")
-    refresh = st.button("Refresh Feed", use_container_width=True)
-    if refresh:
+    if st.button("Refresh Feed", use_container_width=True):
         st.cache_data.clear()
 
     @st.cache_data(ttl=40, show_spinner=False)
-    def _load_recent_memories(api_base_url: str) -> list[dict[str, Any]]:
-        return _request_json("GET", api_base_url, "/memories/recent", query={"limit": 10})
+    def _load(api_base_url: str, key: str) -> list[dict[str, Any]]:
+        return _request_json(
+            "GET", api_base_url, "/memories/recent", query={"limit": 10}, api_key=key or None
+        )
 
     try:
-        memories = _load_recent_memories(base_url)
+        memories = _load(base_url, api_key)
     except RuntimeError as exc:
         st.error(str(exc))
         return
@@ -232,25 +230,50 @@ def _render_memory_feed(base_url: str) -> None:
 
     for memory in memories:
         tags = ", ".join(memory.get("tags", [])) or "none"
-        title = memory.get("title", "Untitled")
-        meta = (
-            f"{memory.get('memory_type', 'note')} | "
-            f"importance {memory.get('importance', 1)} | "
-            f"{_format_timestamp(memory.get('created_at'))}"
-        )
         with st.container(border=True):
-            st.markdown(f"**{title}**")
-            st.caption(meta)
+            st.markdown(f"**{memory.get('title', 'Untitled')}**")
+            st.caption(
+                f"{memory.get('memory_type', 'note')} | "
+                f"importance {memory.get('importance', 1)} | "
+                f"{_format_timestamp(memory.get('created_at'))}"
+            )
             st.write(memory.get("content", ""))
             st.caption(f"Tags: {tags}")
 
 
-def _render_profile_form(base_url: str) -> None:
-    if not _render_form_shell("profile", "Profile"):
+def _render_context_lookup(base_url: str, api_key: str) -> None:
+    st.subheader("Relevant Context")
+    with st.form("context-form"):
+        query = st.text_area("Query")
+        limit = st.slider("Limit", min_value=1, max_value=25, value=5)
+        submitted = st.form_submit_button("Fetch Context", use_container_width=True)
+
+    if not submitted:
         return
 
     try:
-        profile = _request_json("GET", base_url, "/profile") or {}
+        context = _request_json(
+            "POST",
+            base_url,
+            "/context",
+            payload={"query": query, "limit": limit},
+            api_key=api_key or None,
+        )
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+
+    st.markdown("**Summary**")
+    st.write(context.get("context_summary", ""))
+    with st.expander("Raw response", expanded=False):
+        st.json(context)
+
+
+def _render_profile_form(base_url: str, api_key: str) -> None:
+    if not _render_form_shell("profile", "Profile"):
+        return
+    try:
+        profile = _request_json("GET", base_url, "/profile", api_key=api_key or None) or {}
     except RuntimeError as exc:
         st.error(str(exc))
         profile = {}
@@ -274,20 +297,16 @@ def _render_profile_form(base_url: str) -> None:
             help="Comma-separated",
         )
         preferred_explanation_style = st.text_input(
-            "Explanation style",
-            value=profile.get("preferred_explanation_style", ""),
+            "Explanation style", value=profile.get("preferred_explanation_style", "")
         )
         preferred_code_style = st.text_input(
-            "Code style",
-            value=profile.get("preferred_code_style", ""),
+            "Code style", value=profile.get("preferred_code_style", "")
         )
         preferred_architecture_style = st.text_input(
-            "Architecture style",
-            value=profile.get("preferred_architecture_style", ""),
+            "Architecture style", value=profile.get("preferred_architecture_style", "")
         )
         communication_preferences = st.text_area(
-            "Communication",
-            value=profile.get("communication_preferences", ""),
+            "Communication", value=profile.get("communication_preferences", "")
         )
         is_active = st.checkbox("Active", value=profile.get("is_active", True))
         if st.form_submit_button("Save Profile", use_container_width=True):
@@ -304,7 +323,7 @@ def _render_profile_form(base_url: str) -> None:
                 "is_active": is_active,
             }
             try:
-                _request_json("PUT", base_url, "/profile", payload=payload)
+                _request_json("PUT", base_url, "/profile", payload=payload, api_key=api_key or None)
             except RuntimeError as exc:
                 st.error(str(exc))
             else:
@@ -313,45 +332,39 @@ def _render_profile_form(base_url: str) -> None:
                 st.rerun()
 
 
-def _render_work_style_form(base_url: str) -> None:
+def _render_work_style_form(base_url: str, api_key: str) -> None:
     if not _render_form_shell("work_style", "Work Style"):
         return
-
     try:
-        work_style = _request_json("GET", base_url, "/work-style") or {}
+        ws = _request_json("GET", base_url, "/work-style", api_key=api_key or None) or {}
     except RuntimeError as exc:
         st.error(str(exc))
-        work_style = {}
+        ws = {}
 
     with st.form("work-style-form"):
-        task_approach = st.text_area(
-            "Task approach",
-            value=work_style.get("task_approach", ""),
-        )
+        task_approach = st.text_area("Task approach", value=ws.get("task_approach", ""))
         explanation_preference = st.text_input(
-            "Explanation preference",
-            value=work_style.get("explanation_preference", ""),
+            "Explanation preference", value=ws.get("explanation_preference", "")
         )
         workflow_patterns = st.text_input(
             "Workflow patterns",
-            value=", ".join(work_style.get("workflow_patterns", [])),
+            value=", ".join(ws.get("workflow_patterns", [])),
             help="Comma-separated",
         )
         production_example_preference = st.text_input(
-            "Production example preference",
-            value=work_style.get("production_example_preference", ""),
+            "Production example preference", value=ws.get("production_example_preference", "")
         )
         common_preferences = st.text_input(
             "Common preferences",
-            value=", ".join(work_style.get("common_preferences", [])),
+            value=", ".join(ws.get("common_preferences", [])),
             help="Comma-separated",
         )
         common_mistakes_to_avoid = st.text_input(
             "Common mistakes to avoid",
-            value=", ".join(work_style.get("common_mistakes_to_avoid", [])),
+            value=", ".join(ws.get("common_mistakes_to_avoid", [])),
             help="Comma-separated",
         )
-        is_active = st.checkbox("Active", value=work_style.get("is_active", True))
+        is_active = st.checkbox("Active", value=ws.get("is_active", True))
         if st.form_submit_button("Save Work Style", use_container_width=True):
             payload = {
                 "task_approach": task_approach or None,
@@ -363,7 +376,9 @@ def _render_work_style_form(base_url: str) -> None:
                 "is_active": is_active,
             }
             try:
-                _request_json("PUT", base_url, "/work-style", payload=payload)
+                _request_json(
+                    "PUT", base_url, "/work-style", payload=payload, api_key=api_key or None
+                )
             except RuntimeError as exc:
                 st.error(str(exc))
             else:
@@ -372,14 +387,13 @@ def _render_work_style_form(base_url: str) -> None:
                 st.rerun()
 
 
-def _render_memory_form(base_url: str) -> None:
+def _render_memory_form(base_url: str, api_key: str) -> None:
     if not _render_form_shell("memory", "Save Memory"):
         return
-
     with st.form("memory-form"):
         title = st.text_input("Title")
         content = st.text_area("Content")
-        memory_type = st.selectbox("Type", [member.value for member in MemoryType], index=6)
+        memory_type = st.selectbox("Type", [m.value for m in MemoryType], index=6)
         tags = st.text_input("Tags", help="Comma-separated")
         source = st.text_input("Source")
         importance = st.slider("Importance", min_value=1, max_value=5, value=1)
@@ -393,7 +407,9 @@ def _render_memory_form(base_url: str) -> None:
                 "importance": importance,
             }
             try:
-                _request_json("POST", base_url, "/memories", payload=payload)
+                _request_json(
+                    "POST", base_url, "/memories", payload=payload, api_key=api_key or None
+                )
                 st.cache_data.clear()
             except RuntimeError as exc:
                 st.error(str(exc))
@@ -403,10 +419,9 @@ def _render_memory_form(base_url: str) -> None:
                 st.rerun()
 
 
-def _render_task_outcome_form(base_url: str) -> None:
+def _render_task_outcome_form(base_url: str, api_key: str) -> None:
     if not _render_form_shell("task_outcome", "Task Outcome"):
         return
-
     with st.form("outcome-form"):
         task_summary = st.text_area("Task summary")
         final_solution = st.text_area("Final solution")
@@ -426,7 +441,9 @@ def _render_task_outcome_form(base_url: str) -> None:
                 "source": source or None,
             }
             try:
-                _request_json("POST", base_url, "/task-outcomes", payload=payload)
+                _request_json(
+                    "POST", base_url, "/task-outcomes", payload=payload, api_key=api_key or None
+                )
             except RuntimeError as exc:
                 st.error(str(exc))
             else:
@@ -435,27 +452,161 @@ def _render_task_outcome_form(base_url: str) -> None:
                 st.rerun()
 
 
-def _render_context_lookup(base_url: str) -> None:
-    st.subheader("Relevant Context")
-    with st.form("context-form"):
-        query = st.text_area("Query")
-        limit = st.slider("Limit", min_value=1, max_value=25, value=5)
-        submitted = st.form_submit_button("Fetch Context", use_container_width=True)
+# ---------------------------------------------------------------------------
+# User management tab  (direct DB access — no HTTP auth needed)
+# ---------------------------------------------------------------------------
 
-    if not submitted:
+
+def _get_auth_service():
+    from personal_context_mcp.services.dependencies import get_auth_service
+
+    return get_auth_service()
+
+
+def _render_new_key_banner() -> None:
+    """Show a one-time banner when a key was just created or regenerated."""
+    info = st.session_state.get("new_key_info")
+    if not info:
         return
+
+    st.success(
+        f"User **{info['email']}** — secret key generated. Copy it now, it won't be shown again."
+    )
+    st.code(info["raw_key"], language=None)
+    if st.button("I've copied the key", key="dismiss-key-banner"):
+        st.session_state.pop("new_key_info", None)
+        st.rerun()
+    st.divider()
+
+
+def _render_create_user_form() -> None:
+    with st.expander("Create new user", expanded=False):
+        with st.form("create-user-form", clear_on_submit=True):
+            email = st.text_input("Email address")
+            use_expiry = st.checkbox("Set expiry date")
+            expiry_date = None
+            if use_expiry:
+                expiry_date = st.date_input(
+                    "Expires on",
+                    value=datetime.now(UTC).date() + timedelta(days=365),
+                )
+
+            submitted = st.form_submit_button(
+                "Create user & generate key", use_container_width=True
+            )
+
+        if submitted:
+            email = email.strip().lower()
+            if not email or "@" not in email:
+                st.error("Enter a valid email address.")
+                return
+
+            try:
+                auth_service = _get_auth_service()
+                if auth_service.user_repo.get_by_email(email):
+                    st.error(f"A user with email **{email}** already exists.")
+                    return
+
+                expires_at = None
+                if use_expiry and expiry_date:
+                    expires_at = datetime.combine(expiry_date, datetime.min.time(), tzinfo=UTC)
+
+                _, raw_key = auth_service.create_user(email, expires_at=expires_at)
+            except Exception as exc:
+                st.error(f"Could not create user: {exc}")
+                return
+
+            st.session_state["new_key_info"] = {"email": email, "raw_key": raw_key}
+            st.rerun()
+
+
+def _render_user_row(row: dict, idx: int) -> None:
+    status_icon = "🟢" if row["is_active"] else "🔴"
+    expiry = _format_timestamp(row["expires_at"]) if row["expires_at"] else "Never"
+    last_seen = _format_timestamp(row["last_seen_at"]) if row["last_seen_at"] else "Never"
+    ip = row.get("ip_address") or "—"
+
+    with st.container(border=True):
+        col_info, col_actions = st.columns([3, 1])
+
+        with col_info:
+            st.markdown(f"**{row['email']}** {status_icon}")
+            st.caption(
+                f"Key prefix: `{row['key_prefix']}...`  |  "
+                f"Expires: {expiry}  |  "
+                f"Last seen: {last_seen}  |  "
+                f"IP: {ip}"
+            )
+
+        with col_actions:
+            auth_service = _get_auth_service()
+            user = auth_service.user_repo.get_by_id(row["id"])
+            if user is None:
+                return
+
+            if row["is_active"]:
+                if st.button("Deactivate", key=f"deactivate-{idx}", use_container_width=True):
+                    auth_service.set_active(user, active=False)
+                    st.rerun()
+            else:
+                if st.button("Activate", key=f"activate-{idx}", use_container_width=True):
+                    auth_service.set_active(user, active=True)
+                    st.rerun()
+
+            if st.button("Regenerate key", key=f"regen-{idx}", use_container_width=True):
+                _, raw_key = auth_service.regenerate_key(user)
+                st.session_state["new_key_info"] = {"email": user.email, "raw_key": raw_key}
+                st.rerun()
+
+            if st.button("Delete", key=f"delete-{idx}", use_container_width=True, type="secondary"):
+                st.session_state[f"confirm_delete_{idx}"] = True
+                st.rerun()
+
+            if st.session_state.get(f"confirm_delete_{idx}"):
+                st.warning(f"Delete **{row['email']}**? This cannot be undone.")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Yes, delete", key=f"confirm-yes-{idx}", use_container_width=True):
+                        auth_service.delete_user(user)
+                        st.session_state.pop(f"confirm_delete_{idx}", None)
+                        st.rerun()
+                with c2:
+                    if st.button("Cancel", key=f"confirm-no-{idx}", use_container_width=True):
+                        st.session_state.pop(f"confirm_delete_{idx}", None)
+                        st.rerun()
+
+
+def _render_users_tab() -> None:
+    st.subheader("User Management")
+    st.caption(
+        "Manages access keys for all users. Secret keys are hashed in the database. "
+        "Share the raw key with each user once."
+    )
+
+    _render_new_key_banner()
+    _render_create_user_form()
+
+    st.divider()
+    st.markdown("### Active users")
 
     try:
-        context = _request_json("POST", base_url, "/context", payload={"query": query, "limit": limit})
-    except RuntimeError as exc:
-        st.error(str(exc))
+        auth_service = _get_auth_service()
+        users = auth_service.list_users_with_sessions()
+    except Exception as exc:
+        st.error(f"Could not load users: {exc}")
         return
 
-    st.markdown("**Summary**")
-    st.write(context.get("context_summary", ""))
+    if not users:
+        st.info("No users yet. Create one above.")
+        return
 
-    with st.expander("Raw response", expanded=False):
-        st.json(context)
+    for idx, row in enumerate(users):
+        _render_user_row(row, idx)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
@@ -468,7 +619,10 @@ def main() -> None:
     with st.sidebar:
         st.header("Connection")
         base_url = st.text_input("API base URL", value=DEFAULT_API_BASE_URL)
-        st.caption("Start the FastAPI server first, then point Streamlit at that base URL.")
+        api_key = st.text_input(
+            "API key", type="password", placeholder="sk_... (leave blank if auth disabled)"
+        )
+        st.caption("Start the FastAPI server, then point Streamlit at that base URL.")
 
         try:
             health = _request_json("GET", base_url, "/health")
@@ -477,18 +631,34 @@ def main() -> None:
         else:
             st.success(f"API status: {health.get('status', 'unknown')}")
 
-    left, right = st.columns([1.45, 1], gap="large")
+    tab_memory, tab_profile, tab_users = st.tabs(["Memories", "Profile & Style", "Users"])
 
-    with left:
-        _render_memory_feed(base_url)
-        _render_context_lookup(base_url)
+    with tab_memory:
+        left, right = st.columns([1.45, 1], gap="large")
+        with left:
+            _render_memory_feed(base_url, api_key)
+            _render_context_lookup(base_url, api_key)
+        with right:
+            _render_form_actions(
+                ("memory", "task_outcome"),
+                key_prefix="memory-tab",
+            )
+            _render_memory_form(base_url, api_key)
+            _render_task_outcome_form(base_url, api_key)
 
-    with right:
-        _render_form_actions()
-        _render_profile_form(base_url)
-        _render_work_style_form(base_url)
-        _render_memory_form(base_url)
-        _render_task_outcome_form(base_url)
+    with tab_profile:
+        left, right = st.columns([1, 1], gap="large")
+        with left:
+            _render_form_actions(
+                ("profile", "work_style"),
+                key_prefix="profile-tab",
+            )
+        with right:
+            _render_profile_form(base_url, api_key)
+            _render_work_style_form(base_url, api_key)
+
+    with tab_users:
+        _render_users_tab()
 
 
 if __name__ == "__main__":

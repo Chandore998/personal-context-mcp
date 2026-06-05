@@ -6,12 +6,14 @@ from personal_context_mcp.schemas.work_style import WorkStyleCreate
 
 
 class WorkStyleRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, user_id: str = "default") -> None:
         self.session = session
+        self.user_id = user_id
 
     def get_active(self) -> WorkStyle | None:
         stmt = (
             select(WorkStyle)
+            .where(WorkStyle.user_id == self.user_id)
             .where(WorkStyle.is_active.is_(True))
             .order_by(WorkStyle.updated_at.desc())
             .limit(1)
@@ -21,7 +23,7 @@ class WorkStyleRepository:
     def upsert_active(self, payload: WorkStyleCreate) -> WorkStyle:
         work_style = self.get_active()
         if work_style is None:
-            work_style = WorkStyle(**payload.model_dump())
+            work_style = WorkStyle(**payload.model_dump(), user_id=self.user_id)
             self.session.add(work_style)
         else:
             for field, value in payload.model_dump().items():
