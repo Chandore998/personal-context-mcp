@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from alembic import context
 from personal_context_mcp.config.settings import get_settings
@@ -41,6 +41,10 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Prevent migrations from hanging indefinitely when tables are locked
+        # by the running deployment. Fail after 30 seconds so the deployment
+        # can be retried once the old deployment is torn down.
+        connection.execute(text("SET lock_timeout = '30s'"))
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
