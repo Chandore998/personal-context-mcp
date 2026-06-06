@@ -1,4 +1,8 @@
+from collections.abc import Generator
+from typing import Annotated
+
 from fastapi import Depends
+from sqlalchemy.orm import Session
 
 from personal_context_mcp.auth.api_key import current_user_id_var
 from personal_context_mcp.config.settings import get_settings
@@ -15,7 +19,6 @@ from personal_context_mcp.services.profile import ProfileService
 from personal_context_mcp.services.retrieval import RetrievalLimits, RetrievalService
 from personal_context_mcp.services.task_outcome import TaskOutcomeService
 from personal_context_mcp.services.work_style import WorkStyleService
-
 
 # --- Pure builders (used by MCP tools, tests, and FastAPI deps below) ---
 
@@ -61,6 +64,14 @@ def get_auth_service() -> AuthService:
     )
 
 
+def get_request_db_session() -> Generator[Session, None, None]:
+    session = get_db_session()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
 # --- FastAPI dependency to resolve current user from contextvar (set by auth middleware) ---
 
 def get_current_user_id() -> str:
@@ -70,21 +81,59 @@ def get_current_user_id() -> str:
 
 # --- FastAPI service deps (used with Depends() in routes) ---
 
-def get_profile_service(user_id: str = Depends(get_current_user_id)) -> ProfileService:
-    return build_profile_service(user_id)
+def get_profile_service(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    session: Annotated[Session, Depends(get_request_db_session)],
+) -> ProfileService:
+    return ProfileService(UserProfileRepository(session, user_id=user_id))
 
 
-def get_work_style_service(user_id: str = Depends(get_current_user_id)) -> WorkStyleService:
-    return build_work_style_service(user_id)
+def get_work_style_service(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    session: Annotated[Session, Depends(get_request_db_session)],
+) -> WorkStyleService:
+    return WorkStyleService(WorkStyleRepository(session, user_id=user_id))
 
 
-def get_memory_service(user_id: str = Depends(get_current_user_id)) -> MemoryService:
-    return build_memory_service(user_id)
+def get_memory_service(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    session: Annotated[Session, Depends(get_request_db_session)],
+) -> MemoryService:
+    return MemoryService(
+        MemoryRepository(session, user_id=user_id),
+        profile_service=ProfileService(UserProfileRepository(session, user_id=user_id)),
+        work_style_service=WorkStyleService(WorkStyleRepository(session, user_id=user_id)),
+    )
 
 
-def get_task_outcome_service(user_id: str = Depends(get_current_user_id)) -> TaskOutcomeService:
-    return build_task_outcome_service(user_id)
+def get_task_outcome_service(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    session: Annotated[Session, Depends(get_request_db_session)],
+) -> TaskOutcomeService:
+    return TaskOutcomeService(TaskOutcomeRepository(session, user_id=user_id))
 
 
-def get_retrieval_service(user_id: str = Depends(get_current_user_id)) -> RetrievalService:
-    return build_retrieval_service(user_id)
+def get_retrieval_service(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    session: Annotated[Session, Depends(get_request_db_session)],
+) -> RetrievalService:
+    settings = get_settings()
+    profile_service = ProfileService(UserProfileRepository(session, user_id=user_id))
+    work_style_service = WorkStyleService(WorkStyleRepository(session, user_id=user_id))
+    memory_service = MemoryService(
+        MemoryRepository(session, user_id=user_id),
+        profile_service=profile_service,
+        work_style_service=work_style_service,
+    )
+    return RetrievalService(
+        profile_service=profile_service,
+        work_style_service=work_style_service,
+        memory_service=memory_service,
+        task_outcome_service=TaskOutcomeService(
+            TaskOutcomeRepository(session, user_id=user_id)
+        ),
+        limits=RetrievalLimits(
+            memories=settings.context_memory_limit,
+            task_outcomes=settings.context_task_limit,
+        ),
+    )

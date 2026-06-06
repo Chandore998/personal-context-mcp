@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from personal_context_mcp.api.routes import api_router
@@ -42,29 +43,41 @@ def create_app() -> FastAPI:
             return await call_next(request)
 
         auth_service = request.app.state.auth_service_factory()
+        try:
+            # Authentication uses synchronous SQLAlchemy and must not block the async loop.
+            has_users = await run_in_threadpool(auth_service.has_any_users)
+            if not has_users:
+                current_user_id_var.set("default")
+                return await call_next(request)
 
-        # Auth is disabled when no users exist in the DB.
-        if not auth_service.has_any_users():
-            current_user_id_var.set("default")
-            return await call_next(request)
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                return JSONResponse(
+                    {"detail": "Missing or invalid Authorization header"},
+                    status_code=401,
+                )
 
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return JSONResponse(
-                {"detail": "Missing or invalid Authorization header"},
-                status_code=401,
+            raw_key = auth_header[7:]
+            user = await run_in_threadpool(auth_service.validate_key, raw_key)
+            if user is None:
+                return JSONResponse(
+                    {"detail": "Invalid or expired API key"},
+                    status_code=401,
+                )
+
+            ip = request.client.host if request.client else None
+            await run_in_threadpool(
+                auth_service.record_session,
+                user.id,
+                ip_address=ip,
             )
 
-        raw_key = auth_header[7:]
-        user = auth_service.validate_key(raw_key)
-        if user is None:
-            return JSONResponse({"detail": "Invalid or expired API key"}, status_code=401)
-
-        ip = request.client.host if request.client else None
-        auth_service.record_session(user.id, ip_address=ip)
-
-        current_user_id_var.set(user.id)
-        return await call_next(request)
+            current_user_id_var.set(user.id)
+            return await call_next(request)
+        finally:
+            close = getattr(auth_service, "close", None)
+            if close is not None:
+                await run_in_threadpool(close)
 
     app.include_router(api_router)
 

@@ -25,6 +25,9 @@ class AuthService:
         self.user_repo = user_repo
         self.session_repo = session_repo
 
+    def close(self) -> None:
+        self.user_repo.session.close()
+
     def has_any_users(self) -> bool:
         return self.user_repo.count() > 0
 

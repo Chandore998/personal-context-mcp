@@ -9,7 +9,7 @@ The goal is simple: give agents a lightweight, structured memory layer they can 
 - FastAPI service for managing profile, work style, memories, task outcomes, and relevant context
 - MCP server built with FastMCP for agent-side context access
 - PostgreSQL + `pgvector` storage layer using SQLAlchemy and Alembic
-- Streamlit dashboard for local inspection and manual management
+- NiceGUI dashboard for local inspection and manual management
 - Retrieval service that returns compressed context instead of raw history
 
 ## Current scope
@@ -43,7 +43,7 @@ src/personal_context_mcp/
 |-- repositories/  Persistence layer
 |-- schemas/       Pydantic request and response models
 |-- services/      Business logic and retrieval
-`-- dashboard/     Streamlit UI
+`-- dashboard/     NiceGUI UI
 ```
 
 ## MCP tools
@@ -123,13 +123,13 @@ uvicorn personal_context_mcp.main:app --reload
 
 API docs are available at `http://127.0.0.1:8000/docs` in non-production environments.
 
-### Streamlit dashboard
+### NiceGUI dashboard
 
 ```powershell
-streamlit run src/personal_context_mcp/dashboard/streamlit_app.py
+python -m personal_context_mcp.dashboard
 ```
 
-### FastAPI and Streamlit together
+### FastAPI and NiceGUI together
 
 ```powershell
 .\start-dev.cmd
@@ -138,7 +138,7 @@ streamlit run src/personal_context_mcp/dashboard/streamlit_app.py
 This starts:
 
 - FastAPI on `http://127.0.0.1:8000`
-- Streamlit on `http://127.0.0.1:8501`
+- NiceGUI on `http://127.0.0.1:8501`
 
 ### MCP server
 
@@ -170,6 +170,10 @@ The main environment variables are:
 - `APP_ENV`
 - `LOG_LEVEL`
 - `DATABASE_URL`
+- `DB_POOL_SIZE`
+- `DB_MAX_OVERFLOW`
+- `DB_POOL_TIMEOUT_SECONDS`
+- `DB_POOL_RECYCLE_SECONDS`
 - `EMBEDDING_DIMENSIONS`
 - `PGVECTOR_DIMENSION`
 - `CONTEXT_MEMORY_LIMIT`

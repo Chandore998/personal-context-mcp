@@ -4,7 +4,6 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 ENV_FILE = PROJECT_ROOT / ".env"
 
@@ -31,7 +30,18 @@ class Settings(BaseSettings):
     mcp_allowed_origins: list[str] = Field(default_factory=list, alias="MCP_ALLOWED_ORIGINS")
     railway_public_domain: str | None = Field(default=None, alias="RAILWAY_PUBLIC_DOMAIN")
     sql_echo: bool = Field(default=False, alias="SQL_ECHO")
-
+    db_pool_size: int = Field(default=10, ge=1, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=20, ge=0, alias="DB_MAX_OVERFLOW")
+    db_pool_timeout_seconds: int = Field(
+        default=30,
+        ge=1,
+        alias="DB_POOL_TIMEOUT_SECONDS",
+    )
+    db_pool_recycle_seconds: int = Field(
+        default=1800,
+        ge=1,
+        alias="DB_POOL_RECYCLE_SECONDS",
+    )
 
     @field_validator("database_url")
     @classmethod
