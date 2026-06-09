@@ -18,7 +18,9 @@ class UserAuthRepository:
         return self.session.scalar(select(UserAuth).where(UserAuth.key_hash == key_hash))
 
     def get_by_email(self, email: str) -> UserAuth | None:
-        return self.session.scalar(select(UserAuth).where(UserAuth.email == email))
+        return self.session.scalar(
+            select(UserAuth).where(func.lower(UserAuth.email) == email.lower())
+        )
 
     def get_by_id(self, user_id: str) -> UserAuth | None:
         return self.session.scalar(select(UserAuth).where(UserAuth.id == user_id))

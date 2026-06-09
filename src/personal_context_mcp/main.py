@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from personal_context_mcp.api.admin_routes import admin_router
 from personal_context_mcp.api.routes import api_router
 from personal_context_mcp.auth.api_key import current_user_id_var
 from personal_context_mcp.config.settings import get_settings
@@ -11,7 +12,7 @@ from personal_context_mcp.mcp.server import build_personal_context_mcp_server
 from personal_context_mcp.services.dependencies import get_auth_service
 
 # Paths that never require authentication.
-_PUBLIC_PATHS = {"/health"}
+_PUBLIC_PATHS = {"/health", "/admin/signup", "/admin/login"}
 
 
 def create_app() -> FastAPI:
@@ -39,7 +40,7 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
-        if request.url.path in _PUBLIC_PATHS:
+        if request.url.path in _PUBLIC_PATHS or request.url.path.startswith("/admin/"):
             return await call_next(request)
 
         auth_service = request.app.state.auth_service_factory()
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
                 await run_in_threadpool(close)
 
     app.include_router(api_router)
+    app.include_router(admin_router)
 
     # Mount a hosted MCP endpoint for remote agent connections.
     app.mount("/mcp", mcp_app)

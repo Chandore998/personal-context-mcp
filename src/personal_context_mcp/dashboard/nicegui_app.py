@@ -14,7 +14,7 @@ from nicegui.elements.button import Button
 from personal_context_mcp.models.enums import MemoryType
 from personal_context_mcp.services.dependencies import get_auth_service
 
-DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_API_BASE_URL = os.getenv("DASHBOARD_API_BASE_URL", "http://127.0.0.1:8000")
 DEFAULT_API_TIMEOUT_SECONDS = 5
 
 
@@ -1448,7 +1448,7 @@ def main() -> None:
     ui.run(
         title="Personal Context Dashboard",
         host=os.getenv("DASHBOARD_HOST", "127.0.0.1"),
-        port=int(os.getenv("DASHBOARD_PORT", "8501")),
+        port=int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8501"))),
         reload=False,
         show=False,
     )

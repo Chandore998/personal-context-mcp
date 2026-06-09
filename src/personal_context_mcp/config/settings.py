@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     mcp_allowed_hosts: list[str] = Field(default_factory=list, alias="MCP_ALLOWED_HOSTS")
     mcp_allowed_origins: list[str] = Field(default_factory=list, alias="MCP_ALLOWED_ORIGINS")
     railway_public_domain: str | None = Field(default=None, alias="RAILWAY_PUBLIC_DOMAIN")
+    admin_token_secret: str = Field(
+        default="change-this-admin-token-secret",
+        min_length=16,
+        alias="ADMIN_TOKEN_SECRET",
+    )
+    admin_token_expire_minutes: int = Field(
+        default=60,
+        ge=1,
+        alias="ADMIN_TOKEN_EXPIRE_MINUTES",
+    )
     sql_echo: bool = Field(default=False, alias="SQL_ECHO")
     db_pool_size: int = Field(default=10, ge=1, alias="DB_POOL_SIZE")
     db_max_overflow: int = Field(default=20, ge=0, alias="DB_MAX_OVERFLOW")

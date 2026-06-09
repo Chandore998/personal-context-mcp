@@ -129,6 +129,31 @@ API docs are available at `http://127.0.0.1:8000/docs` in non-production environ
 python -m personal_context_mcp.dashboard
 ```
 
+### Railway deployment
+
+Deploy the API and NiceGUI dashboard as two Railway services from the same
+repository.
+
+API service:
+
+```text
+Pre-deploy command: alembic upgrade head
+Start command: uvicorn --app-dir src personal_context_mcp.main:app --host 0.0.0.0 --port $PORT
+Healthcheck path: /health
+```
+
+Dashboard service:
+
+```text
+Start command: python -m personal_context_mcp.dashboard
+Healthcheck path: /
+```
+
+Set `DASHBOARD_HOST=0.0.0.0` and set `DASHBOARD_API_BASE_URL` to the API
+service's Railway URL, such as `https://your-api.up.railway.app`. Railway's
+injected `PORT` variable is used automatically. Both services should receive
+the same application variables, including `DATABASE_URL`.
+
 ### FastAPI and NiceGUI together
 
 ```powershell
@@ -180,7 +205,17 @@ The main environment variables are:
 - `CONTEXT_TASK_LIMIT`
 - `MCP_SERVER_NAME`
 - `MCP_TRANSPORT`
+- `ADMIN_TOKEN_SECRET`
+- `ADMIN_TOKEN_EXPIRE_MINUTES`
+- `DASHBOARD_HOST`
+- `DASHBOARD_PORT`
+- `DASHBOARD_API_BASE_URL`
 - `SQL_ECHO`
+
+Set `ADMIN_TOKEN_SECRET` to a long random value in production. Admin login
+returns a bearer token that is required by `GET /admin/users` and
+`POST /admin/users`. The create-user response includes the generated API key
+once; only its hash and prefix are stored afterward.
 
 ## Development
 

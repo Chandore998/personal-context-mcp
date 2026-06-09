@@ -8,6 +8,14 @@ from personal_context_mcp.repositories.user_auth_repository import UserAuthRepos
 from personal_context_mcp.repositories.user_session_repository import UserSessionRepository
 
 
+class UserAlreadyExistsError(ValueError):
+    pass
+
+
+class UserNotFoundError(ValueError):
+    pass
+
+
 def generate_secret_key() -> str:
     return "sk_" + secrets.token_hex(24)
 
@@ -37,10 +45,14 @@ class AuthService:
         expires_at: datetime | None = None,
     ) -> tuple[UserAuth, str]:
         """Create a user and return (user, raw_secret_key). The raw key is shown once — store it."""
+        normalized_email = email.strip().lower()
+        if self.user_repo.get_by_email(normalized_email) is not None:
+            raise UserAlreadyExistsError("A user with this email already exists.")
+
         raw_key = generate_secret_key()
         user = UserAuth(
             id=str(uuid4()),
-            email=email,
+            email=normalized_email,
             key_hash=hash_key(raw_key),
             key_prefix=raw_key[:12],
             is_active=True,
@@ -69,12 +81,27 @@ class AuthService:
         self.user_repo.save(user)
         return user, raw_key
 
+    def regenerate_user_key(self, user_id: str) -> tuple[UserAuth, str]:
+        return self.regenerate_key(self.get_user(user_id))
+
     def set_active(self, user: UserAuth, *, active: bool) -> UserAuth:
         user.is_active = active
         return self.user_repo.save(user)
 
+    def deactivate_user(self, user_id: str) -> UserAuth:
+        return self.set_active(self.get_user(user_id), active=False)
+
     def delete_user(self, user: UserAuth) -> None:
         self.user_repo.delete(user)
+
+    def delete_user_by_id(self, user_id: str) -> None:
+        self.delete_user(self.get_user(user_id))
+
+    def get_user(self, user_id: str) -> UserAuth:
+        user = self.user_repo.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError("User not found.")
+        return user
 
     def list_users_with_sessions(self) -> list[dict]:
         users = self.user_repo.list_all()
