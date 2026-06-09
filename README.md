@@ -9,7 +9,6 @@ The goal is simple: give agents a lightweight, structured memory layer they can 
 - FastAPI service for managing profile, work style, memories, task outcomes, and relevant context
 - MCP server built with FastMCP for agent-side context access
 - PostgreSQL + `pgvector` storage layer using SQLAlchemy and Alembic
-- NiceGUI dashboard for local inspection and manual management
 - Retrieval service that returns compressed context instead of raw history
 
 ## Current scope
@@ -42,8 +41,7 @@ src/personal_context_mcp/
 |-- models/        SQLAlchemy entities
 |-- repositories/  Persistence layer
 |-- schemas/       Pydantic request and response models
-|-- services/      Business logic and retrieval
-`-- dashboard/     NiceGUI UI
+`-- services/      Business logic and retrieval
 ```
 
 ## MCP tools
@@ -123,18 +121,9 @@ uvicorn personal_context_mcp.main:app --reload
 
 API docs are available at `http://127.0.0.1:8000/docs` in non-production environments.
 
-### NiceGUI dashboard
-
-```powershell
-python -m personal_context_mcp.dashboard
-```
-
 ### Railway deployment
 
-Deploy the API and NiceGUI dashboard as two Railway services from the same
-repository.
-
-API service:
+Deploy the API as a Railway service:
 
 ```text
 Pre-deploy command: alembic upgrade head
@@ -142,28 +131,13 @@ Start command: uvicorn --app-dir src personal_context_mcp.main:app --host 0.0.0.
 Healthcheck path: /health
 ```
 
-Dashboard service:
-
-```text
-Start command: python -m personal_context_mcp.dashboard
-Healthcheck path: /
-```
-
-Set `DASHBOARD_HOST=0.0.0.0` and set `DASHBOARD_API_BASE_URL` to the API
-service's Railway URL, such as `https://your-api.up.railway.app`. Railway's
-injected `PORT` variable is used automatically. Both services should receive
-the same application variables, including `DATABASE_URL`.
-
-### FastAPI and NiceGUI together
+### Development launcher
 
 ```powershell
 .\start-dev.cmd
 ```
 
-This starts:
-
-- FastAPI on `http://127.0.0.1:8000`
-- NiceGUI on `http://127.0.0.1:8501`
+This starts FastAPI on `http://127.0.0.1:8000`.
 
 ### MCP server
 
@@ -207,9 +181,6 @@ The main environment variables are:
 - `MCP_TRANSPORT`
 - `ADMIN_TOKEN_SECRET`
 - `ADMIN_TOKEN_EXPIRE_MINUTES`
-- `DASHBOARD_HOST`
-- `DASHBOARD_PORT`
-- `DASHBOARD_API_BASE_URL`
 - `SQL_ECHO`
 
 Set `ADMIN_TOKEN_SECRET` to a long random value in production. Admin login
@@ -236,7 +207,6 @@ ruff format --check .
 
 - The storage layer is separated from retrieval logic so ranking can evolve without rewriting the API or MCP surface.
 - `pgvector` support is already part of the schema boundary, but V1 retrieval still relies on keyword relevance, importance, and recency.
-- The dashboard is meant for local operations and inspection, not as a polished end-user product.
 
 ## Limitations
 
